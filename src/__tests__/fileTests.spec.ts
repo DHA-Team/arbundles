@@ -1,5 +1,5 @@
-import { DataItem, ArweaveSigner } from "../../index";
-import { bundleAndSignData, createData, FileDataItem } from "../../src/file/index";
+import { DataItem, ArweaveSigner, MAX_TAG_BYTES, MAX_THEORETICAL_TAGS_COUNT } from "../../index";
+import { bundleAndSignData, createData, FileDataItem } from "../file";
 import { readFileSync } from "fs";
 import path from "path";
 import * as fs from "fs";
@@ -186,7 +186,7 @@ describe("DataItem", () => {
                 it("should return false", async () => {
                   await dataItem.sign(signer);
                   const tagStart = await dataItem.getTagsStart();
-                  const fakeTagLength = longTo8ByteArray(4096 + 1);
+                  const fakeTagLength = longTo8ByteArray(MAX_TAG_BYTES * (MAX_THEORETICAL_TAGS_COUNT + 1));
                   const fakeTagCnt = longTo8ByteArray(10);
 
                   const handle = fs.openSync(dataItem.filename, "r+");
@@ -281,12 +281,12 @@ describe("static methods", () => {
           expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
         });
       });
-      describe("given a invalid DataItem due to having too many tags", () => {
+      describe("given a invalid DataItem due to having too many full tags", () => {
         it("should return false", async () => {
           const dataItem = await createData("loremIpsum", signer);
           await dataItem.sign(signer);
           const tagStart = await dataItem.getTagsStart();
-          const fakeTagLength = longTo8ByteArray(4096 + 1);
+          const fakeTagLength = longTo8ByteArray(MAX_TAG_BYTES * (MAX_THEORETICAL_TAGS_COUNT + 1));
           const handle = fs.openSync(dataItem.filename, "r+");
           fs.writeSync(handle, fakeTagLength, 0, 8, tagStart + 8);
           fs.closeSync(handle);
