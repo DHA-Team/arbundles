@@ -26,7 +26,7 @@ export class InjectedEthereumSigner implements Signer {
   }
 
   async setPublicKey(): Promise<void> {
-    const address = "sign this message to connect to Bundlr.Network";
+    const address = "sign this message to set your public key on the connected ANS-104 data item signer";
     const signedMsg = await this.signer.signMessage(address);
     const hash = await hashMessage(address);
     const recoveredKey = recoverPublicKey(arrayify(hash), signedMsg);
