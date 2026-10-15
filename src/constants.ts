@@ -7,6 +7,7 @@ export enum SignatureConfig {
   MULTIAPTOS = 6,
   TYPEDETHEREUM = 7,
   KYVE = 101,
+  INJECTEDNEAR = 413, // NEP-413 signMessage
 }
 
 export interface SignatureMeta {
@@ -55,5 +56,10 @@ export const SIG_CONFIG: Record<SignatureConfig, SignatureMeta> = {
     sigLength: 65,
     pubLength: 65,
     sigName: "kyve",
+  },
+  [SignatureConfig.INJECTEDNEAR]: {
+    sigLength: 64,
+    pubLength: 32,
+    sigName: "injectedNear",
   },
 };

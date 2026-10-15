@@ -6,6 +6,7 @@ import {
   EthereumSigner,
   HexInjectedSolanaSigner,
   InjectedAptosSigner,
+  InjectedNearSigner,
   MultiSignatureAptosSigner,
   TypedEthereumSigner,
 } from "./chains/index";
@@ -42,4 +43,7 @@ export const indexToType: IndexToType = {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-expect-error
   7: TypedEthereumSigner,
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-expect-error
+  413: InjectedNearSigner,
 };
