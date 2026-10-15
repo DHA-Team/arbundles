@@ -15,3 +15,5 @@ export { default as TypedEthereumSigner } from "./TypedEthereumSigner";
 export * from "./InjectedTypedEthereumSigner";
 export { default as ArconnectSigner } from "./arconnectSigner";
 export { default as KyveSigner } from "./KyveSigner";
+export { default as InjectedNearSigner } from "./InjectedNearSigner";
+export * from "./InjectedNearSigner";
