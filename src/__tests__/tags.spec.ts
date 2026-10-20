@@ -198,4 +198,16 @@ describe("Tag tests", function () {
     expect(serializedTags).toStrictEqual(avscTags);
     expect(deAvscTags).toEqual(randomTags);
   });
+
+  describe("reject malformed tag encodings", () => {
+    it("missing Avro terminator", () => {
+      const enc = serializeTags([{ name: "a", value: "b" }]);
+      expect(() => deserializeTags(enc.subarray(0, enc.length - 1))).toThrow();
+    });
+
+    it("trailing garbage after terminator", () => {
+      const enc = serializeTags([{ name: "a", value: "b" }]);
+      expect(() => deserializeTags(Buffer.concat([enc, Buffer.from([1, 2, 3])]))).toThrow();
+    });
+  });
 });

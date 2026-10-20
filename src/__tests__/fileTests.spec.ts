@@ -293,6 +293,32 @@ describe("static methods", () => {
           expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
         });
       });
+      describe("given a invalid DataItem due to missing Avro tag terminator", () => {
+        it("should return false", async () => {
+          const dataItem = await createData("loremIpsum", signer, { tags: [{ name: "x", value: "y" }] });
+          await dataItem.sign(signer);
+          const tagStart = await dataItem.getTagsStart();
+          const tagBytesLength = byteArrayToLong(
+            await fs.promises.readFile(dataItem.filename).then((b) => b.subarray(tagStart + 8, tagStart + 16)),
+          );
+          const handle = fs.openSync(dataItem.filename, "r+");
+          fs.writeSync(handle, Buffer.from([0x01]), 0, 1, tagStart + 16 + tagBytesLength - 1);
+          fs.closeSync(handle);
+          expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
+        });
+      });
+      describe("given a invalid DataItem due to non-empty tag bytes with zero tag count", () => {
+        it("should return false", async () => {
+          const dataItem = await createData("loremIpsum", signer, { tags: [] });
+          await dataItem.sign(signer);
+          const tagStart = await dataItem.getTagsStart();
+          const handle = fs.openSync(dataItem.filename, "r+");
+          fs.writeSync(handle, longTo8ByteArray(1), 0, 8, tagStart + 8);
+          fs.writeSync(handle, Buffer.from([0]), 0, 1, tagStart + 16);
+          fs.closeSync(handle);
+          expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
+        });
+      });
     });
   });
 

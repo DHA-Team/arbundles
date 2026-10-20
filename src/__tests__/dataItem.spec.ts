@@ -1,10 +1,10 @@
 import base64url from "base64url";
 import { createData } from "../ar-data-create";
-import type DataItem from "../DataItem";
+import DataItem from "../DataItem";
 import { EthereumSigner } from "../signing";
 import type { Tag } from "../tags";
 import { serializeTags } from "../tags";
-import { byteArrayToLong } from "../utils";
+import { byteArrayToLong, longTo8ByteArray } from "../utils";
 
 const testTagsVariations = [
   { description: "no", tags: [] },
@@ -270,6 +270,35 @@ describe("DataItem", () => {
         //   await dataItem.sign(signer);
         //   expect(() => dataItem.isValid()).rejects.toThrowError();
       });
+    });
+  });
+
+  describe("verify() tag section validation", () => {
+    const signer = new EthereumSigner("8da4ef21b864d2cc526dbdb2a120bd2874c36c9d0a1fb7f8c63d7f7a8b41de8f");
+
+    it("should return false when the Avro terminator is missing", async () => {
+      const tags = [{ name: "x", value: "y" }];
+      const dataItem = createData("hello", signer, { tags });
+      await dataItem.sign(signer);
+      const buf = Buffer.from(dataItem.getRaw());
+      // @ts-expect-error private property access
+      const tagsStart = dataItem.getTagsStart();
+      const numberOfTagBytes = byteArrayToLong(buf.subarray(tagsStart + 8, tagsStart + 16));
+      const lastTagByteIndex = tagsStart + 16 + numberOfTagBytes - 1;
+      expect(buf[lastTagByteIndex]).toBe(0);
+      buf[lastTagByteIndex] = 0x01;
+      expect(await DataItem.verify(buf)).toBe(false);
+    });
+
+    it("should return false when numberOfTags is zero but tag bytes are non-empty", async () => {
+      const dataItem = createData("hello", signer, { tags: [] });
+      await dataItem.sign(signer);
+      const buf = Buffer.from(dataItem.getRaw());
+      // @ts-expect-error private property access
+      const tagsStart = dataItem.getTagsStart();
+      buf.set(longTo8ByteArray(1), tagsStart + 8);
+      buf[tagsStart + 16] = 0;
+      expect(await DataItem.verify(buf)).toBe(false);
     });
   });
 });
