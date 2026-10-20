@@ -73,6 +73,7 @@ export async function processStream(stream: Readable): Promise<Record<string, an
     bytes = await readBytes(reader, bytes, 8);
     const tagsBytesLength = byteArrayToLong(bytes.subarray(0, 8));
     bytes = bytes.subarray(8);
+    if (tagsLength === 0 && tagsBytesLength !== 0) throw new Error("Tags lengths don't match");
 
     bytes = await readBytes(reader, bytes, tagsBytesLength);
     const tagsBytes = bytes.subarray(0, tagsBytesLength);

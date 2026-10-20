@@ -74,10 +74,23 @@ export class FileDataItem implements BundleItem {
       return false;
     }
 
+    if (numberOfTags === 0 && numberOfTagsBytes !== 0) {
+      await handle.close();
+      return false;
+    }
+    if (numberOfTags > 0 && numberOfTagsBytes === 0) {
+      await handle.close();
+      return false;
+    }
+
     const tagsBytes = await read(handle.fd, Buffer.allocUnsafe(numberOfTagsBytes), 0, numberOfTagsBytes, tagsStart + 16).then((r) => r.buffer);
     if (numberOfTags > 0) {
       try {
-        deserializeTags(tagsBytes);
+        const tags = deserializeTags(tagsBytes);
+        if (tags.length !== numberOfTags) {
+          await handle.close();
+          return false;
+        }
       } catch (e) {
         await handle.close();
         return false;
