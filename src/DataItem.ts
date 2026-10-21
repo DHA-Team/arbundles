@@ -220,7 +220,6 @@ export class DataItem implements BundleItem {
     if (numberOfTagBytes > MAX_TAG_BYTES) return false;
 
     if (numberOfTags === 0 && numberOfTagBytes !== 0) return false;
-    if (numberOfTags > 0 && numberOfTagBytes === 0) return false;
 
     if (numberOfTags > 0) {
       try {

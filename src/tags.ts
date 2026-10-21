@@ -124,20 +124,14 @@ export class AVSCTap {
     this.buf = buf;
   }
 
-  protected readByte(): number {
-    if (this.pos >= this.buf.length) {
-      throw new Error("TAP position out of range");
-    }
-    return this.buf[this.pos++];
-  }
-
   protected readLong(): number {
     let n = 0;
     let k = 0;
+    const buf = this.buf;
     let b, h, f, fk;
 
     do {
-      b = this.readByte();
+      b = buf[this.pos++];
       h = b & 0x80;
       n |= (b & 0x7f) << k;
       k += 7;
@@ -148,7 +142,7 @@ export class AVSCTap {
       f = n;
       fk = 268435456; // 2 ** 28.
       do {
-        b = this.readByte();
+        b = buf[this.pos++];
         f += (b & 0x7f) * fk;
         fk *= 128;
       } while (b & 0x80);
@@ -159,7 +153,8 @@ export class AVSCTap {
   }
 
   protected skipLong(): void {
-    while (this.readByte() & 0x80) {}
+    const buf = this.buf;
+    while (buf[this.pos++] & 0x80) {}
   }
 
   public readTags(): Tag[] {
