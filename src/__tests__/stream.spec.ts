@@ -4,7 +4,7 @@ import { processStream, streamSigner, streamExportForTesting } from "../../index
 import { Readable } from "stream";
 import type { DataItemCreateOptions } from "../../index";
 import { DataItem } from "../../index";
-import { bundleAndSignData, longTo8ByteArray } from "../../index";
+import { bundleAndSignData, longTo8ByteArray, serializeTags } from "../../index";
 import {
   createData,
   PolygonSigner,
@@ -304,16 +304,16 @@ describe("Process Stream", function () {
     }
   });
 
-  it("should throw when numberOfTags is zero but tag bytes are non-empty", async function () {
+  it("should throw when numberOfTags is zero but tag bytes hold tags", async function () {
     const signer = new EthereumSigner("8da4ef21b864d2cc526dbdb2a120bd2874c36c9d0a1fb7f8c63d7f7a8b41de8f");
     const raw = Buffer.from(createData("hello", signer, { tags: [] }).getRaw());
     // @ts-expect-error private property access
     const tagsStart = new DataItem(raw).getTagsStart();
-    // Declare one tag byte and insert a lone 0x00 before the data, then sign over the malformed bytes
-    const malformed = Buffer.concat([raw.subarray(0, tagsStart + 8), longTo8ByteArray(1), Buffer.from([0]), raw.subarray(tagsStart + 16)]);
+    const tagBytes = serializeTags([{ name: "x", value: "y" }]);
+    const malformed = Buffer.concat([raw.subarray(0, tagsStart + 8), longTo8ByteArray(tagBytes.length), tagBytes, raw.subarray(tagsStart + 16)]);
     const bundle = await bundleAndSignData([new DataItem(malformed)], signer);
 
-    await expect(processStream(Readable.from(bundle.getRaw()))).rejects.toThrow("Tags lengths don't match");
+    await expect(processStream(Readable.from(bundle.getRaw()))).rejects.toThrow("Invalid ANS-104 tags: tag count mismatch");
   });
 });
 

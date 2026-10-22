@@ -172,17 +172,26 @@ describe("Creating and indexing a data item", function () {
 
   it("should get all correct data", async function () {
     const signer = new ArweaveSigner(wallet0);
-    const d = { tags: [{ name: "", value: "" }] };
+    const d = { tags: [{ name: "a", value: "" }] };
 
     const data = await createData("hi", signer, d);
     await data.sign(signer);
     expect(data.signatureType).toEqual(1);
     expect(data.owner).toEqual(wallet0.n);
     expect(data.anchor).toEqual("");
-    expect(data.tags).toEqual([{ name: "", value: "" }]);
+    expect(data.tags).toEqual([{ name: "a", value: "" }]);
     expect(data.target).toEqual("");
     expect(data.rawData.toString()).toEqual("hi");
     expect(await DataItem.verify(data.getRaw())).toEqual(true);
+  });
+
+  it("should reject a tag with an empty name", async function () {
+    const signer = new ArweaveSigner(wallet0);
+
+    const data = await createData("hi", signer, { tags: [{ name: "", value: "" }] });
+    await data.sign(signer);
+    expect(() => data.tags).toThrow("Invalid ANS-104 tags: bytes after terminator");
+    expect(await DataItem.verify(data.getRaw())).toEqual(false);
   });
 
   // it("should verify large bundle", async function () {

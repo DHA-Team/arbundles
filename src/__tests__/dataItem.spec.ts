@@ -5,6 +5,8 @@ import { EthereumSigner } from "../signing";
 import type { Tag } from "../tags";
 import { serializeTags } from "../tags";
 import { byteArrayToLong, longTo8ByteArray } from "../utils";
+import { deepHash } from "../deepHash";
+import { stringToBuffer } from "../nodeUtils";
 
 const testTagsVariations = [
   { description: "no", tags: [] },
@@ -290,15 +292,56 @@ describe("DataItem", () => {
       expect(await DataItem.verify(buf)).toBe(false);
     });
 
-    it("should return false when numberOfTags is zero but tag bytes are non-empty", async () => {
-      const dataItem = createData("hello", signer, { tags: [] });
-      await dataItem.sign(signer);
-      const buf = Buffer.from(dataItem.getRaw());
+    function withTagSection(numberOfTags: number, tagBytes: Buffer): DataItem {
+      const raw = Buffer.from(createData("hello", signer, { tags: [] }).getRaw());
       // @ts-expect-error private property access
-      const tagsStart = dataItem.getTagsStart();
-      buf.set(longTo8ByteArray(1), tagsStart + 8);
-      buf[tagsStart + 16] = 0;
-      expect(await DataItem.verify(buf)).toBe(false);
+      const tagsStart = new DataItem(raw).getTagsStart();
+      return new DataItem(
+        Buffer.concat([
+          raw.subarray(0, tagsStart),
+          longTo8ByteArray(numberOfTags),
+          longTo8ByteArray(tagBytes.length),
+          tagBytes,
+          raw.subarray(tagsStart + 16),
+        ]),
+      );
+    }
+
+    async function signed(dataItem: DataItem): Promise<Buffer> {
+      await dataItem.sign(signer);
+      return dataItem.getRaw();
+    }
+
+    it("should return false when numberOfTags is zero but tag bytes hold tags", async () => {
+      expect(await DataItem.verify(await signed(withTagSection(0, serializeTags([{ name: "x", value: "y" }]))))).toBe(false);
+    });
+
+    it("should return true when numberOfTags is zero and tag bytes are a lone terminator", async () => {
+      expect(await DataItem.verify(await signed(withTagSection(0, Buffer.from([0]))))).toBe(true);
+    });
+
+    it("should return false for a tag name that isn't valid UTF-8, but not for such a value", async () => {
+      expect(await DataItem.verify(await signed(withTagSection(1, Buffer.from("0202ff026100", "hex"))))).toBe(false);
+      expect(await DataItem.verify(await signed(withTagSection(1, Buffer.from("02026102ff00", "hex"))))).toBe(true);
+    });
+
+    it("should check the signature against the re-encoded tags", async () => {
+      const twoBlocks = Buffer.from("0202610262020263026400", "hex");
+      expect(await DataItem.verify(await signed(withTagSection(2, twoBlocks)))).toBe(true);
+
+      const dataItem = withTagSection(2, twoBlocks);
+      const wireSignatureData = await deepHash([
+        stringToBuffer("dataitem"),
+        stringToBuffer("1"),
+        stringToBuffer(dataItem.signatureType.toString()),
+        dataItem.rawOwner,
+        dataItem.rawTarget,
+        dataItem.rawAnchor,
+        dataItem.rawTags,
+        dataItem.rawData,
+      ]);
+      await dataItem.setSignature(Buffer.from(await signer.sign(wireSignatureData)));
+      expect(await DataItem.verify(dataItem.getRaw())).toBe(false);
     });
   });
 });
