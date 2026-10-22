@@ -11,7 +11,7 @@ import type { AxiosResponse } from "axios";
 import axios from "axios";
 import { SIG_CONFIG } from "../constants";
 import { promisify } from "util";
-import { deserializeTags } from "../tags";
+import { deserializeTags, signedTagBytes, verifyTagSection } from "../tags";
 import type { Base64URLString } from "../types";
 
 const read = promisify(FSRead);
@@ -74,23 +74,13 @@ export class FileDataItem implements BundleItem {
       return false;
     }
 
-    if (numberOfTags === 0 && numberOfTagsBytes !== 0) {
+    const tagsBytes = await read(handle.fd, Buffer.allocUnsafe(numberOfTagsBytes), 0, numberOfTagsBytes, tagsStart + 16).then((r) => r.buffer);
+    let signedTags: Buffer;
+    try {
+      signedTags = verifyTagSection(numberOfTags, tagsBytes);
+    } catch (e) {
       await handle.close();
       return false;
-    }
-
-    const tagsBytes = await read(handle.fd, Buffer.allocUnsafe(numberOfTagsBytes), 0, numberOfTagsBytes, tagsStart + 16).then((r) => r.buffer);
-    if (numberOfTags > 0) {
-      try {
-        const tags = deserializeTags(tagsBytes);
-        if (tags.length !== numberOfTags) {
-          await handle.close();
-          return false;
-        }
-      } catch (e) {
-        await handle.close();
-        return false;
-      }
     }
     const Signer = indexToType[sigType];
     const owner = await item.rawOwner();
@@ -102,7 +92,7 @@ export class FileDataItem implements BundleItem {
       owner,
       await item.rawTarget(),
       await item.rawAnchor(),
-      await item.rawTags(),
+      signedTags,
       createReadStream(filename, {
         start: await item.dataStart(),
       }),
@@ -253,7 +243,7 @@ export class FileDataItem implements BundleItem {
       await this.rawOwner(),
       await this.rawTarget(),
       await this.rawAnchor(),
-      await this.rawTags(),
+      signedTagBytes(await this.rawTags()),
       createReadStream(this.filename, { start: dataStart }),
     ]);
 
