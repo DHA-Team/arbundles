@@ -8,7 +8,7 @@ import { indexToType } from "./signing/index";
 import getSignatureData from "./ar-data-base";
 import { SIG_CONFIG, SignatureConfig } from "./constants";
 import { getCryptoDriver } from "$/utils";
-import { deserializeTags } from "./tags";
+import { deserializeTags, verifyTagSection } from "./tags";
 import { createHash } from "crypto";
 import type { Base64URLString } from "./types";
 
@@ -219,18 +219,10 @@ export class DataItem implements BundleItem {
 
     if (numberOfTagBytes > MAX_TAG_BYTES) return false;
 
-    if (numberOfTags > 0) {
-      try {
-        const tags: { name: string; value: string }[] = deserializeTags(
-          Buffer.from(buffer.subarray(tagsStart + 16, tagsStart + 16 + numberOfTagBytes)),
-        );
-
-        if (tags.length !== numberOfTags) {
-          return false;
-        }
-      } catch (e) {
-        return false;
-      }
+    try {
+      verifyTagSection(numberOfTags, buffer.subarray(tagsStart + 16, tagsStart + 16 + numberOfTagBytes));
+    } catch (e) {
+      return false;
     }
 
     // eslint-disable-next-line @typescript-eslint/naming-convention

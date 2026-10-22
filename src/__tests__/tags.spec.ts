@@ -198,4 +198,40 @@ describe("Tag tests", function () {
     expect(serializedTags).toStrictEqual(avscTags);
     expect(deAvscTags).toEqual(randomTags);
   });
+
+  describe("decode tag sections", () => {
+    it.each([
+      ["valid tags", "020261026200", [{ name: "a", value: "b" }]],
+      [
+        "two blocks",
+        "0202610262020263026400",
+        [
+          { name: "a", value: "b" },
+          { name: "c", value: "d" },
+        ],
+      ],
+      ["a negative block count", "01080261026200", [{ name: "a", value: "b" }]],
+      ["an empty value", "0202610000", [{ name: "a", value: "" }]],
+      ["a lone terminator", "00", []],
+      ["zero written in two bytes", "8000", []],
+      ["a number cut off at the end", "020261026280", [{ name: "a", value: "b" }]],
+      ["a value length cut off at the end of a block", "0104026100", [{ name: "a", value: "" }]],
+    ])("accepts %s", (_, hex, tags) => {
+      expect(deserializeTags(Buffer.from(hex, "hex"))).toEqual(tags);
+    });
+
+    it.each([
+      ["a missing terminator", "0202610262", "Invalid ANS-104 tags: missing terminator"],
+      ["no bytes", "", "Invalid ANS-104 tags: missing terminator"],
+      ["a trailing byte", "02026102620000", "Invalid ANS-104 tags: bytes after terminator"],
+      ["an invalid block size", "01050261026200", "Invalid ANS-104 tags: invalid block size"],
+      ["a negative name length", "0201026200", "TAP Position out of range"],
+      ["an empty name", "0200026200", "TAP Position out of range"],
+      ["an empty name and value", "02000000", "Invalid ANS-104 tags: bytes after terminator"],
+      ["an empty name after a tag", "040261026200026300", "TAP Position out of range"],
+      ["junk", "010203", "TAP Position out of range"],
+    ])("rejects %s", (_, hex, message) => {
+      expect(() => deserializeTags(Buffer.from(hex, "hex"))).toThrow(message);
+    });
+  });
 });

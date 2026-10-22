@@ -9,7 +9,7 @@ import { SIG_CONFIG } from "../constants";
 import { stringToBuffer } from "$/utils";
 import { deepHash } from "../deepHash";
 import type { Signer } from "../signing/index";
-import { deserializeTags } from "../tags";
+import { deserializeTags, verifyTagSection } from "../tags";
 import { createHash } from "crypto";
 
 export async function processStream(stream: Readable): Promise<Record<string, any>[]> {
@@ -75,9 +75,9 @@ export async function processStream(stream: Readable): Promise<Record<string, an
     bytes = bytes.subarray(8);
 
     bytes = await readBytes(reader, bytes, tagsBytesLength);
-    const tagsBytes = bytes.subarray(0, tagsBytesLength);
-    const tags = tagsLength !== 0 && tagsBytesLength !== 0 ? deserializeTags(Buffer.from(tagsBytes)) : [];
-    if (tags.length !== tagsLength) throw new Error("Tags lengths don't match");
+    const tagsBytes = Buffer.from(bytes.subarray(0, tagsBytesLength));
+    const signedTags = verifyTagSection(tagsLength, tagsBytes);
+    const tags = tagsBytesLength !== 0 ? deserializeTags(tagsBytes) : [];
     bytes = bytes.subarray(tagsBytesLength);
 
     const transform = new Transform();
@@ -94,7 +94,7 @@ export async function processStream(stream: Readable): Promise<Record<string, an
       owner,
       target,
       anchor,
-      tagsBytes,
+      signedTags,
       transform,
     ]);
 

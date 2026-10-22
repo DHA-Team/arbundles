@@ -293,6 +293,32 @@ describe("static methods", () => {
           expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
         });
       });
+      describe("given a invalid DataItem due to missing Avro tag terminator", () => {
+        it("should return false", async () => {
+          const dataItem = await createData("loremIpsum", signer, { tags: [{ name: "x", value: "y" }] });
+          await dataItem.sign(signer);
+          const tagStart = await dataItem.getTagsStart();
+          const tagBytesLength = byteArrayToLong(await fs.promises.readFile(dataItem.filename).then((b) => b.subarray(tagStart + 8, tagStart + 16)));
+          const handle = fs.openSync(dataItem.filename, "r+");
+          fs.writeSync(handle, Buffer.from([0x01]), 0, 1, tagStart + 16 + tagBytesLength - 1);
+          fs.closeSync(handle);
+          expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
+        });
+      });
+      describe("given a invalid DataItem due to tags in the tag bytes with zero tag count", () => {
+        it("should return false", async () => {
+          const dataItem = await createData("loremIpsum", signer, { tags: [] });
+          const raw = await fs.promises.readFile(dataItem.filename);
+          const tagStart = await dataItem.getTagsStart();
+          const tagBytes = serializeTags([{ name: "x", value: "y" }]);
+          const malformed = new DataItem(
+            Buffer.concat([raw.subarray(0, tagStart + 8), longTo8ByteArray(tagBytes.length), tagBytes, raw.subarray(tagStart + 16)]),
+          );
+          await malformed.sign(signer);
+          await fs.promises.writeFile(dataItem.filename, malformed.getRaw());
+          expect(await FileDataItem.verify(dataItem.filename)).toEqual(false);
+        });
+      });
     });
   });
 

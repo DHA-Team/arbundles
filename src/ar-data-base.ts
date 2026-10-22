@@ -1,5 +1,6 @@
 import type DataItem from "./DataItem";
 import { deepHash, stringToBuffer } from "$/utils";
+import { signedTagBytes } from "./tags";
 /**
  * Options for creation of a DataItem
  */
@@ -17,7 +18,7 @@ async function getSignatureData(item: DataItem): Promise<Uint8Array> {
     item.rawOwner,
     item.rawTarget,
     item.rawAnchor,
-    item.rawTags,
+    signedTagBytes(item.rawTags),
     item.rawData,
   ]);
 }

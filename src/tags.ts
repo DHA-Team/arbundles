@@ -5,6 +5,11 @@ export interface Tag {
   value: string;
 }
 
+export interface RawTag {
+  name: Buffer;
+  value: Buffer;
+}
+
 export class AVSCTap {
   protected buf: Buffer;
   protected pos: number;
@@ -32,6 +37,17 @@ export class AVSCTap {
         this.writeString(tag.value);
         // this.itemsType._write(tap, val[i]);
       }
+    }
+    this.writeLong(0);
+  }
+
+  public writeRawTags(tags: RawTag[]): void {
+    if (!tags.length) return;
+    this.writeLong(tags.length);
+    for (const bytes of tags.flatMap(({ name, value }) => [name, value])) {
+      this.writeLong(bytes.length);
+      bytes.copy(this.buf, this.pos);
+      this.pos += bytes.length;
     }
     this.writeLong(0);
   }
@@ -131,7 +147,8 @@ export class AVSCTap {
     let b, h, f, fk;
 
     do {
-      b = buf[this.pos++];
+      // A number cut off by the end of the input keeps the value read so far
+      b = this.pos < buf.length ? buf[this.pos++] : 0;
       h = b & 0x80;
       n |= (b & 0x7f) << k;
       k += 7;
@@ -142,7 +159,7 @@ export class AVSCTap {
       f = n;
       fk = 268435456; // 2 ** 28.
       do {
-        b = buf[this.pos++];
+        b = this.pos < buf.length ? buf[this.pos++] : 0;
         f += (b & 0x7f) * fk;
         fk *= 128;
       } while (b & 0x80);
@@ -158,33 +175,46 @@ export class AVSCTap {
   }
 
   public readTags(): Tag[] {
-    // var items = this.itemsType;
-    const val: Tag[] = [];
+    return this.readRawTags().map(({ name, value }) => ({ name: name.toString(), value: value.toString() }));
+  }
+
+  public readRawTags(): RawTag[] {
+    const val: RawTag[] = [];
+    const buf = this.buf;
     let n;
-    while ((n = this.readLong())) {
+    for (;;) {
+      if (this.pos >= buf.length) throw new Error("Invalid ANS-104 tags: missing terminator");
+      if (!(n = this.readLong())) break;
       if (n < 0) {
         n = -n;
-        this.skipLong(); // Skip size.
+        const size = this.readLong();
+        if (size < 0 || size > buf.length - this.pos) throw new Error("Invalid ANS-104 tags: invalid block size");
+        this.buf = buf.subarray(0, this.pos + size);
       }
-      while (n--) {
-        const name = this.readString();
-        const value = this.readString();
-        val.push(/* items._read(tap) */ { name, value });
+      while (n-- > 0) {
+        if (this.pos >= this.buf.length) throw new Error("Invalid ANS-104 tags: truncated tag");
+        const name = this.readBytes();
+        // A name length of 0 ends the block
+        if (!name.length) break;
+        val.push({ name, value: this.readBytes() });
       }
+      if (this.buf !== buf && this.pos !== this.buf.length) throw new Error("Invalid ANS-104 tags: bytes left in block");
+      this.buf = buf;
     }
+    if (this.pos !== buf.length) throw new Error("Invalid ANS-104 tags: bytes after terminator");
     return val;
   }
 
-  protected readString(): string {
+  protected readBytes(): Buffer {
     const len = this.readLong();
     const pos = this.pos;
     const buf = this.buf;
     this.pos += len;
-    if (this.pos > buf.length) {
+    if (len < 0 || this.pos > buf.length) {
       // return undefined;
       throw new Error("TAP Position out of range");
     }
-    return this.buf.slice(pos, pos + len).toString();
+    return buf.subarray(pos, pos + len);
   }
 }
 
@@ -199,4 +229,24 @@ export function serializeTags(tags: Tag[]): Buffer {
 export function deserializeTags(tagsBuffer: Buffer): Tag[] {
   const tap = new AVSCTap(tagsBuffer);
   return tap.readTags();
+}
+
+export function verifyTagSection(numberOfTags: number, tagsBuffer: Buffer): Buffer {
+  if (numberOfTags === 0 && tagsBuffer.length === 0) return tagsBuffer;
+  const tags = new AVSCTap(tagsBuffer).readRawTags();
+  if (tags.length !== numberOfTags) throw new Error("Invalid ANS-104 tags: tag count mismatch");
+  for (const { name } of tags) {
+    if (!Buffer.from(name.toString()).equals(name)) throw new Error("Invalid ANS-104 tags: tag name not UTF-8");
+  }
+  return signedTagBytes(tagsBuffer);
+}
+
+export function signedTagBytes(tagsBuffer: Buffer): Buffer {
+  try {
+    const tap = new AVSCTap(Buffer.alloc(tagsBuffer.length + 16)); // re-encoding adds at most a few bytes
+    tap.writeRawTags(new AVSCTap(tagsBuffer).readRawTags());
+    return tap.toBuffer();
+  } catch (e) {
+    return tagsBuffer;
+  }
 }
